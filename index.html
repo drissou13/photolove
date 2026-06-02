@@ -17,6 +17,13 @@
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
+            transition: background 0.5s ease, color 0.5s ease; /* Transition douce si l'écran doit s'éclairer */
+        }
+
+        /* Classe activée si le studio détecte qu'il fait trop sombre */
+        body.low-light-mode {
+            background: #f5f0e6; /* Fond très clair pour servir de réflecteur de lumière */
+            color: #2b221a;
         }
 
         #container {
@@ -24,6 +31,7 @@
             max-width: 600px;
             padding: 20px;
             position: relative;
+            z-index: 2;
         }
 
         h1 {
@@ -32,11 +40,20 @@
             margin-bottom: 5px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
         }
+        
+        body.low-light-mode h1 {
+            color: #8b261b;
+            text-shadow: none;
+        }
 
         .subtitle {
             font-style: italic;
             color: #a89a84;
             margin-bottom: 30px;
+        }
+        
+        body.low-light-mode .subtitle {
+            color: #5c4d3c;
         }
 
         .camera-box {
@@ -49,12 +66,19 @@
             position: relative;
             overflow: hidden;
             margin: 0 auto 20px auto;
+            transition: transform 0.3s ease;
         }
 
         video, canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transition: filter 0.3s ease;
+        }
+
+        /* Filtre de base + boost numérique si trop sombre */
+        video.boost-brightness {
+            filter: brightness(1.3) contrast(1.1);
         }
 
         canvas {
@@ -90,7 +114,12 @@
             color: #e0d5c1;
             line-height: 1.5;
         }
+        
+        body.low-light-mode #status-text {
+            color: #2b221a;
+        }
 
+        /* Flash de capture */
         #flash {
             position: fixed;
             top: 0;
@@ -111,6 +140,11 @@
             0% { opacity: 1; }
             100% { opacity: 0; }
         }
+
+        /* Canvas caché utilisé uniquement pour calculer la luminosité en arrière-plan */
+        #light-analyzer {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -130,6 +164,9 @@
         <p id="status-text">Installez-vous et cliquez sur le bouton...</p>
     </div>
 
+    <!-- Canvas invisible pour l'analyse de lumière -->
+    <canvas id="light-analyzer" width="50" height="50"></canvas>
+
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -137,35 +174,24 @@
         const statusText = document.getElementById('status-text');
         const flash = document.getElementById('flash');
         const context = canvas.getContext('2d');
+        
+        // Variables pour l'analyse de luminosité
+        const analyzerCanvas = document.getElementById('light-analyzer');
+        const analyzerContext = analyzerCanvas.getContext('2d');
+        let lightCheckInterval;
 
-        // LE DICTIONNAIRE DE L'AMOUR MONDIAL 🌍❤️
+        // DICTIONNAIRE MONDIAL DE L'AMOUR
         const loveWords = [
-            // Français
             "je t'aime", "amour", "mon cœur", "mon coeur", "chéri", "chérie", "je taime", "adore", "aimer", "mon ange",
-            // Anglais
             "i love you", "love", "my love", "sweetheart", "darling", "babe", "forever", "honey",
-            // Espagnol
             "te amo", "te quiero", "amor", "mi amor", "corazón", "corazon", "cariño", "carino",
-            // Italien
             "ti amo", "amore", "amore mio", "tesoro", "ti voglio bene",
-            // Allemand
             "ich liebe dich", "liebe", "mein schatz", "schatz",
-            // Portugais
             "eu te amo", "amor", "meu amor", "querido", "querida",
-            // Arabe (transcriptions courantes)
             "habibi", "habibti", "bahebak", "ana bahebak", "ya rouhi",
-            // Turc
             "seni seviyorum", "aşkım", "askim", "sevgilim",
-            // Néerlandais
-            "ik hou van jou", "liefde",
-            // Russe (transcriptions)
-            "ya tebya lyublyu", "lyubov", "lyublyu",
-            // Japonais (transcriptions)
-            "aishiteru", "daisuki", "anata",
-            // Coréen (transcriptions)
-            "saranghae", "saranghaeyo",
-            // Chinois (transcriptions)
-            "wo ai ni"
+            "ik hou van jou", "liefde", "ya tebya lyublyu", "lyubov", "lyublyu",
+            "aishiteru", "daisuki", "anata", "saranghae", "saranghaeyo", "wo ai ni"
         ];
 
         async function initCamera() {
@@ -180,7 +206,7 @@
 
         function parlerVieuxPhotographe() {
             return new Promise((resolve) => {
-                const texte = "Entrez, approchez... Installez-vous. Mon vieil appareil a voyagé dans le monde entier, vous savez. Il a vu l'amour à Paris, à Tokyo, à New York, à Beyrouth... Il comprend toutes les langues, toutes les cultures. La seule chose qu'il attend, c'est votre cœur. Alors, regardez-vous, et dites-vous un mot doux. Dans la langue que vous voulez... Je vous écoute.";
+                const texte = "Entrez, approchez... Installez-vous. Mon vieil appareil a voyagé dans le monde entier, vous savez. Il comprend toutes les langues, toutes les cultures. La seule chose qu'il attend, c'est votre cœur. Alors, regardez-vous, et dites-vous un mot doux. Dans la langue que vous voulez... Je vous écoute.";
                 
                 const message = new SpeechSynthesisUtterance(texte);
                 message.lang = 'fr-FR';
@@ -198,6 +224,41 @@
             });
         }
 
+        // FONCTION : Analyse la luminosité ambiante du flux vidéo
+        function verifierLuminosite() {
+            if (video.paused || video.ended) return;
+
+            // Dessine la vidéo en tout petit dans le canvas masqué
+            analyzerContext.drawImage(video, 0, 0, 50, 50);
+            
+            // Récupère les données des pixels (Rouge, Vert, Bleu)
+            const imageData = analyzerContext.getImageData(0, 0, 50, 50);
+            const data = imageData.data;
+            let colorSum = 0;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i+1];
+                const b = data[i+2];
+
+                // Calcul standard de la clarté perçue (Formule de luminance)
+                const avg = (r * 0.299 + g * 0.587 + b * 0.114);
+                colorSum += avg;
+            }
+
+            // Luminosité moyenne entre 0 (noir complet) et 255 (blanc pur)
+            const brightness = colorSum / (50 * 50);
+
+            // SEUIL DE LUMINOSITÉ : En dessous de 65, on considère qu'il fait trop sombre
+            if (brightness < 65) {
+                document.body.classList.add('low-light-mode');
+                video.classList.add('boost-brightness');
+            } else {
+                document.body.classList.remove('low-light-mode');
+                video.classList.remove('boost-brightness');
+            }
+        }
+
         function lancerEcouteActive() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             
@@ -207,24 +268,25 @@
             }
 
             const recognition = new SpeechRecognition();
-            // "fr-FR" capte très bien les mots étrangers glissés au milieu d'une phrase, 
-            // mais on le configure pour une écoute continue et large.
             recognition.lang = 'fr-FR'; 
             recognition.continuous = true;
             recognition.interimResults = true;
 
             statusText.innerHTML = "<strong>L'appareil écoute... Parlez la langue de l'amour. 🌍</strong>";
 
+            // Lancement de l'analyse automatique de lumière (toutes les 100ms)
+            lightCheckInterval = setInterval(verifierLuminosite, 100);
+
             recognition.onresult = (event) => {
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     let phrase = event.results[i][0].transcript.toLowerCase();
                     console.log("Entendu : ", phrase);
 
-                    // Scan de la phrase pour trouver n'importe quel mot du dictionnaire mondial
                     const motTrouve = loveWords.some(word => phrase.includes(word));
 
                     if (motTrouve) {
                         recognition.stop();
+                        clearInterval(lightCheckInterval); // On arrête de checker la lumière
                         declencherPhoto();
                         break;
                     }
@@ -245,10 +307,22 @@
 
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
+            
+            // On applique l'effet de luminosité sur la photo finale si le mode sombre était actif
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            if(document.body.classList.contains('low-light-mode')) {
+                context.filter = "brightness(1.2) contrast(1.1) sepia(0.6)";
+            } else {
+                context.filter = "sepia(0.6) contrast(1.2) brightness(0.9)";
+            }
+            
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
             video.style.display = 'none';
             canvas.style.display = 'block';
+
+            // Réinitialiser les styles de fond
+            document.body.classList.remove('low-light-mode');
 
             setTimeout(() => {
                 startBtn.style.display = 'inline-block';
