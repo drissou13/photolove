@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Le Lovethon International - Studio Photo Vintage</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1512;
+            color: #e0d5c1;
+            font-family: 'Georgia', serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #container {
+            text-align: center;
+            max-width: 600px;
+            padding: 20px;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #d4af37;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+        }
+
+        .subtitle {
+            font-style: italic;
+            color: #a89a84;
+            margin-bottom: 30px;
+        }
+
+        .camera-box {
+            width: 400px;
+            height: 400px;
+            border: 15px solid #2b221a;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto 20px auto;
+        }
+
+        video, canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: none;
+            filter: sepia(0.6) contrast(1.2) brightness(0.9);
+        }
+
+        .btn-retro {
+            background: #8b261b;
+            color: #fff;
+            border: 2px solid #d4af37;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            font-family: 'Georgia', serif;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-retro:hover {
+            background: #a63022;
+            transform: scale(1.05);
+        }
+
+        #status-text {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            min-height: 50px;
+            color: #e0d5c1;
+            line-height: 1.5;
+        }
+
+        #flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .flash-active {
+            animation: triggerFlash 0.6s ease-out;
+        }
+
+        @keyframes triggerFlash {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="flash"></div>
+
+    <div id="container">
+        <h1>Le Lovethon</h1>
+        <div class="subtitle">L'appareil qui comprend l'amour dans toutes les langues</div>
+
+        <div class="camera-box">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <button id="start-btn" class="btn-retro">Entrer dans le studio</button>
+        <p id="status-text">Installez-vous et cliquez sur le bouton...</p>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('start-btn');
+        const statusText = document.getElementById('status-text');
+        const flash = document.getElementById('flash');
+        const context = canvas.getContext('2d');
+
+        // LE DICTIONNAIRE DE L'AMOUR MONDIAL 🌍❤️
+        const loveWords = [
+            // Français
+            "je t'aime", "amour", "mon cœur", "mon coeur", "chéri", "chérie", "je taime", "adore", "aimer", "mon ange",
+            // Anglais
+            "i love you", "love", "my love", "sweetheart", "darling", "babe", "forever", "honey",
+            // Espagnol
+            "te amo", "te quiero", "amor", "mi amor", "corazón", "corazon", "cariño", "carino",
+            // Italien
+            "ti amo", "amore", "amore mio", "tesoro", "ti voglio bene",
+            // Allemand
+            "ich liebe dich", "liebe", "mein schatz", "schatz",
+            // Portugais
+            "eu te amo", "amor", "meu amor", "querido", "querida",
+            // Arabe (transcriptions courantes)
+            "habibi", "habibti", "bahebak", "ana bahebak", "ya rouhi",
+            // Turc
+            "seni seviyorum", "aşkım", "askim", "sevgilim",
+            // Néerlandais
+            "ik hou van jou", "liefde",
+            // Russe (transcriptions)
+            "ya tebya lyublyu", "lyubov", "lyublyu",
+            // Japonais (transcriptions)
+            "aishiteru", "daisuki", "anata",
+            // Coréen (transcriptions)
+            "saranghae", "saranghaeyo",
+            // Chinois (transcriptions)
+            "wo ai ni"
+        ];
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = stream;
+            } catch (err) {
+                statusText.innerText = "Erreur : Impossible d'accéder à la caméra.";
+                console.error(err);
+            }
+        }
+
+        function parlerVieuxPhotographe() {
+            return new Promise((resolve) => {
+                const texte = "Entrez, approchez... Installez-vous. Mon vieil appareil a voyagé dans le monde entier, vous savez. Il a vu l'amour à Paris, à Tokyo, à New York, à Beyrouth... Il comprend toutes les langues, toutes les cultures. La seule chose qu'il attend, c'est votre cœur. Alors, regardez-vous, et dites-vous un mot doux. Dans la langue que vous voulez... Je vous écoute.";
+                
+                const message = new SpeechSynthesisUtterance(texte);
+                message.lang = 'fr-FR';
+                message.rate = 0.85; 
+                message.pitch = 0.6; 
+
+                const voices = speechSynthesis.getVoices();
+                const frenchVoice = voices.find(voice => voice.lang.includes('FR') && voice.name.toLowerCase().includes('male'));
+                if (frenchVoice) message.voice = frenchVoice;
+
+                statusText.innerText = "Le photographe vous parle...";
+                
+                message.onend = () => { resolve(); };
+                window.speechSynthesis.speak(message);
+            });
+        }
+
+        function lancerEcouteActive() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                statusText.innerText = "La reconnaissance vocale n'est pas supportée ici. Utilisez Chrome ou Safari.";
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            // "fr-FR" capte très bien les mots étrangers glissés au milieu d'une phrase, 
+            // mais on le configure pour une écoute continue et large.
+            recognition.lang = 'fr-FR'; 
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            statusText.innerHTML = "<strong>L'appareil écoute... Parlez la langue de l'amour. 🌍</strong>";
+
+            recognition.onresult = (event) => {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    let phrase = event.results[i][0].transcript.toLowerCase();
+                    console.log("Entendu : ", phrase);
+
+                    // Scan de la phrase pour trouver n'importe quel mot du dictionnaire mondial
+                    const motTrouve = loveWords.some(word => phrase.includes(word));
+
+                    if (motTrouve) {
+                        recognition.stop();
+                        declencherPhoto();
+                        break;
+                    }
+                }
+            };
+
+            recognition.onerror = (err) => { console.error(err); };
+            recognition.start();
+        }
+
+        function declencherPhoto() {
+            statusText.innerText = "📸 CLAC ! Magnifique... L'amour n'a pas de frontières.";
+
+            playCameraSound();
+
+            flash.classList.add('flash-active');
+            setTimeout(() => flash.classList.remove('flash-active'), 600);
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            video.style.display = 'none';
+            canvas.style.display = 'block';
+
+            setTimeout(() => {
+                startBtn.style.display = 'inline-block';
+                startBtn.innerText = "Reprendre une photo";
+                statusText.innerText = "Une autre langue ? Un autre mot doux ?";
+            }, 5000);
+        }
+
+        function playCameraSound() {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const bufferSize = audioCtx.sampleRate * 0.2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 1000;
+            noise.connect(filter);
+            filter.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        startBtn.addEventListener('click', async () => {
+            startBtn.style.display = 'none';
+            video.style.display = 'block';
+            canvas.style.display = 'none';
+            
+            await initCamera();
+            await parlerVieuxPhotographe();
+            lancerEcouteActive();
+        });
+
+        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+        }
+    </script>
+</body>
+</html>
