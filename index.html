@@ -89,6 +89,14 @@
             filter: sepia(0.6) contrast(1.2) brightness(0.9);
         }
 
+        .btn-container {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+        }
+
         .btn-retro {
             background: #8b261b;
             color: #fff;
@@ -105,6 +113,17 @@
         .btn-retro:hover {
             background: #a63022;
             transform: scale(1.05);
+        }
+
+        /* Style spécifique pour le bouton de téléchargement */
+        #download-btn {
+            background: #2b221a;
+            border-color: #a89a84;
+            color: #e0d5c1;
+        }
+        
+        #download-btn:hover {
+            background: #3e3226;
         }
 
         #status-text {
@@ -160,17 +179,21 @@
             <canvas id="canvas"></canvas>
         </div>
 
-        <button id="start-btn" class="btn-retro">Entrer dans le studio</button>
+        <div class="btn-container">
+            <button id="start-btn" class="btn-retro">Entrer dans le studio</button>
+            <button id="download-btn" class="btn-retro" style="display: none;">Télécharger la photo</button>
+        </div>
+        
         <p id="status-text">Installez-vous et cliquez sur le bouton...</p>
     </div>
 
-    <!-- Canvas invisible pour l'analyse de lumière -->
     <canvas id="light-analyzer" width="50" height="50"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const startBtn = document.getElementById('start-btn');
+        const downloadBtn = document.getElementById('download-btn');
         const statusText = document.getElementById('status-text');
         const flash = document.getElementById('flash');
         const context = canvas.getContext('2d');
@@ -324,6 +347,9 @@
             // Réinitialiser les styles de fond
             document.body.classList.remove('low-light-mode');
 
+            // Affichage du bouton de téléchargement directement après la photo
+            downloadBtn.style.display = 'inline-block';
+
             setTimeout(() => {
                 startBtn.style.display = 'inline-block';
                 startBtn.innerText = "Reprendre une photo";
@@ -347,8 +373,25 @@
             noise.start();
         }
 
+        // Événement pour le bouton de téléchargement
+        downloadBtn.addEventListener('click', () => {
+            // Convertit le contenu du canvas en URL d'image (PNG)
+            const imageURL = canvas.toDataURL('image/png');
+            
+            // Crée un lien de téléchargement temporaire en arrière-plan
+            const link = document.createElement('a');
+            link.href = imageURL;
+            link.download = 'lovethon-studio-photo.png'; // Nom du fichier final
+            
+            // Déclenche le téléchargement
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
         startBtn.addEventListener('click', async () => {
             startBtn.style.display = 'none';
+            downloadBtn.style.display = 'none'; // Cache le bouton de téléchargement si on recommence
             video.style.display = 'block';
             canvas.style.display = 'none';
             
